@@ -1,0 +1,88 @@
+name: Benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'players/**'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build DurakBenchmark.csproj -c Release
+
+      - name: Find new player class
+        id: find_player
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- 'players/*.cs' | head -1)
+          echo "Changed file: $CHANGED"
+          if [ -n "$CHANGED" ]; then
+            CLASS=$(grep -oP '(?<=class )\w+' "$CHANGED" | head -1)
+            echo "Found class: $CLASS"
+            echo "player=$CLASS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run benchmark
+        id: run_benchmark
+        run: |
+          PLAYER="${{ steps.find_player.outputs.player }}"
+          if [ -n "$PLAYER" ]; then
+            echo "Running: $PLAYER vs all (100 000 games each)"
+            OUTPUT=$(dotnet run --project DurakBenchmark.csproj -c Release -- --player "$PLAYER" --games 100000 2>&1)
+          else
+            echo "Running: all vs all (50 000 games each)"
+            OUTPUT=$(dotnet run --project DurakBenchmark.csproj -c Release -- --games 50000 2>&1)
+          fi
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post results as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const player = '${{ steps.find_player.outputs.player }}';
+            const output = `${{ steps.run_benchmark.outputs.output }}`;
+            const header = player
+              ? `## 🃏 Результаты бенчмарка: \`${player}\` vs все`
+              : `## 🃏 Результаты бенчмарка: все против всех`;
+            const body = `${header}\n\n\`\`\`\n${output}\n\`\`\``;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' && c.body.includes('Результаты бенчмарка')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
