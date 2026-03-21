@@ -21,7 +21,28 @@ int games = 1_000_000;
 
 for (int i = 0; i < args.Length; i++)
 {
-    if (args[i] == "--player" && i + 1 < args.Length)
+    if (args[i] == "--help" || args[i] == "-h")
+    {
+        Console.WriteLine("Использование: dotnet run -- [опции]");
+        Console.WriteLine();
+        Console.WriteLine("Опции:");
+        Console.WriteLine("  --player <ClassName>   Запустить игрока против всех остальных");
+        Console.WriteLine("  --games <N>            Число партий на матч (по умолчанию: 1 000 000)");
+        Console.WriteLine("  --print-logs           Показать одну партию с выводом хода игры");
+        Console.WriteLine("  --help, -h             Показать эту справку");
+        Console.WriteLine();
+        Console.WriteLine("Доступные игроки:");
+        var allPlayers = DiscoverPlayers();
+        foreach (string name in allPlayers.Keys.Order())
+            Console.WriteLine($"  {name}");
+        Console.WriteLine();
+        Console.WriteLine("Примеры:");
+        Console.WriteLine("  dotnet run -c Release");
+        Console.WriteLine("  dotnet run -c Release -- --player MinimalDefendPlayer --games 100000");
+        Console.WriteLine("  dotnet run -c Release -- --player MinimalDefendPlayer --print-logs");
+        return 0;
+    }
+    else if (args[i] == "--player" && i + 1 < args.Length)
         playerArg = args[++i];
     else if (args[i] == "--print-logs")
         printLogs = true;
