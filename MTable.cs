@@ -10,8 +10,14 @@ public struct SCard
         _suit = suit;
         _rank = rank;
     }
-    public Suits Suit => _suit;
-    public int Rank => _rank;
+    public Suits Suit
+    {
+        get { return _suit; }
+    }
+    public int Rank
+    {
+        get { return _rank; }
+    }
 }
 
 public struct SCardPair
@@ -22,11 +28,17 @@ public struct SCardPair
 
     public SCard Down
     {
-        get => _down;
+        get { return _down; }
         set { _down = value; _beaten = false; }
     }
-    public bool Beaten => _beaten;
-    public SCard Up => _up;
+    public bool Beaten
+    {
+        get { return _beaten; }
+    }
+    public SCard Up
+    {
+        get { return _up; }
+    }
 
     public bool SetUp(SCard up, Suits trump)
     {
@@ -65,30 +77,29 @@ internal class MTable
     public const int TotalCards = 6;
     public const string Separator = " | ";
 
-    private static List<SCard> deck = new();
+    private static List<SCard> deck = new List<SCard>();
     private static IPlayer player1 = null!;
     private static IPlayer player2 = null!;
-    private static List<SCard> plHand1 = new();
-    private static List<SCard> plHand2 = new();
+    private static List<SCard> plHand1 = new List<SCard>();
+    private static List<SCard> plHand2 = new List<SCard>();
     private static SCard trump;
     private static List<SCardPair> table = null!;
-    private static List<SCard> bito = new();
-    public static GameLog CurrentLog;
 
     public static void Initialize(IPlayer p1, IPlayer p2)
     {
         deck.Clear();
         plHand1.Clear();
         plHand2.Clear();
-        bito.Clear();
-        CurrentLog = new GameLog { Actions = new List<ActionRecord>() };
 
-        var temp = new List<SCard>();
-        var rnd = new Random();
+        List<SCard> temp = new List<SCard>();
+        Random rnd = new Random();
 
         for (int c = 0; c <= 3; c++)
             for (int d = 6; d <= 14; d++)
-                temp.Add(new SCard((Suits)c, d));
+            {
+                SCard card = new SCard((Suits)c, d);
+                temp.Add(card);
+            }
 
         for (int c = 0; c < 4 * 9; c++)
         {
@@ -114,7 +125,10 @@ internal class MTable
         Console.WriteLine();
     }
 
-    public static SCard GetTrump() => trump;
+    public static SCard GetTrump()
+    {
+        return trump;
+    }
 
     public static EndGame Play(bool first)
     {
@@ -123,13 +137,13 @@ internal class MTable
 
         while (true)
         {
+            List<SCard> cards;
             table = new List<SCardPair>();
 
-            var attackerHand = playerFirst ? plHand1 : plHand2;
-            var defenderHand = playerFirst ? plHand2 : plHand1;
-            var attackerHandSnapshot = new List<SCard>(attackerHand);
-
-            var cards = playerFirst ? player1.LayCards() : player2.LayCards();
+            if (playerFirst)
+                cards = player1.LayCards();
+            else
+                cards = player2.LayCards();
 
             while (cards.Count > 0)
             {
@@ -137,21 +151,9 @@ internal class MTable
                 cards.RemoveAt(0);
             }
 
+            var attackerHand = playerFirst ? plHand1 : plHand2;
             foreach (var pair in table)
                 attackerHand.Remove(pair.Down);
-
-            CurrentLog.Actions.Add(new ActionRecord {
-                Type = ActionType.Attack,
-                Player1Acts = playerFirst,
-                ActorHand = attackerHandSnapshot,
-                SeenCards = new List<SCard>(bito),
-                Table = new List<SCardPair>(),
-                OpponentCardCount = defenderHand.Count,
-                DeckSize = deck.Count,
-                Trump = trump,
-                PlayedCards = table.Select(p => p.Down).ToList(),
-                ActionResult = true
-            });
 
             Console.WriteLine("Делаем ход");
             ShowTable(table);
@@ -160,35 +162,11 @@ internal class MTable
             {
                 if (playerFirst)
                 {
-                    var defSnap = new List<SCard>(plHand2);
-                    var tableSnap = new List<SCardPair>(table);
                     defend = player2.Defend(table);
-
-                    CurrentLog.Actions.Add(new ActionRecord {
-                        Type = ActionType.Defend, Player1Acts = false,
-                        ActorHand = defSnap, SeenCards = new List<SCard>(bito),
-                        Table = tableSnap, OpponentCardCount = plHand1.Count,
-                        DeckSize = deck.Count, Trump = trump,
-                        PlayedCards = table.Where(p => p.Beaten).Select(p => p.Up).ToList(),
-                        ActionResult = defend
-                    });
-
                     Console.WriteLine("Отбивается " + player2.GetName());
                     ShowTable(table);
 
-                    var atkSnap = new List<SCard>(plHand1);
-                    var tableSnap2 = new List<SCardPair>(table);
                     added = player1.AddCards(table);
-
-                    CurrentLog.Actions.Add(new ActionRecord {
-                        Type = ActionType.Throw, Player1Acts = true,
-                        ActorHand = atkSnap, SeenCards = new List<SCard>(bito),
-                        Table = tableSnap2, OpponentCardCount = plHand2.Count,
-                        DeckSize = deck.Count, Trump = trump,
-                        PlayedCards = table.Skip(tableSnap2.Count).Select(p => p.Down).ToList(),
-                        ActionResult = added
-                    });
-
                     Console.WriteLine("Подкидывает " + player1.GetName() + "  " + added);
                     ShowTable(table);
 
@@ -196,8 +174,13 @@ internal class MTable
                     {
                         while (table.Count > 0)
                         {
-                            player2.AddToHand(table[0].Down); plHand2.Add(table[0].Down);
-                            if (table[0].Beaten) { player2.AddToHand(table[0].Up); plHand2.Add(table[0].Up); }
+                            player2.AddToHand(table[0].Down);
+                            plHand2.Add(table[0].Down);
+                            if (table[0].Beaten)
+                            {
+                                player2.AddToHand(table[0].Up);
+                                plHand2.Add(table[0].Up);
+                            }
                             table.RemoveAt(0);
                         }
                         break;
@@ -206,35 +189,11 @@ internal class MTable
                 }
                 else
                 {
-                    var defSnap = new List<SCard>(plHand1);
-                    var tableSnap = new List<SCardPair>(table);
                     defend = player1.Defend(table);
-
-                    CurrentLog.Actions.Add(new ActionRecord {
-                        Type = ActionType.Defend, Player1Acts = true,
-                        ActorHand = defSnap, SeenCards = new List<SCard>(bito),
-                        Table = tableSnap, OpponentCardCount = plHand2.Count,
-                        DeckSize = deck.Count, Trump = trump,
-                        PlayedCards = table.Where(p => p.Beaten).Select(p => p.Up).ToList(),
-                        ActionResult = defend
-                    });
-
                     Console.WriteLine("Отбивается " + player1.GetName());
                     ShowTable(table);
 
-                    var atkSnap = new List<SCard>(plHand2);
-                    var tableSnap2 = new List<SCardPair>(table);
                     added = player2.AddCards(table);
-
-                    CurrentLog.Actions.Add(new ActionRecord {
-                        Type = ActionType.Throw, Player1Acts = false,
-                        ActorHand = atkSnap, SeenCards = new List<SCard>(bito),
-                        Table = tableSnap2, OpponentCardCount = plHand1.Count,
-                        DeckSize = deck.Count, Trump = trump,
-                        PlayedCards = table.Skip(tableSnap2.Count).Select(p => p.Down).ToList(),
-                        ActionResult = added
-                    });
-
                     Console.WriteLine("Подкидывает " + player2.GetName() + "  " + added);
                     ShowTable(table);
 
@@ -242,8 +201,13 @@ internal class MTable
                     {
                         while (table.Count > 0)
                         {
-                            player1.AddToHand(table[0].Down); plHand1.Add(table[0].Down);
-                            if (table[0].Beaten) { player1.AddToHand(table[0].Up); plHand1.Add(table[0].Up); }
+                            player1.AddToHand(table[0].Down);
+                            plHand1.Add(table[0].Down);
+                            if (table[0].Beaten)
+                            {
+                                player1.AddToHand(table[0].Up);
+                                plHand1.Add(table[0].Up);
+                            }
                             table.RemoveAt(0);
                         }
                         break;
@@ -252,17 +216,14 @@ internal class MTable
                 }
             }
 
-            if (defend)
+            if (playerFirst)
             {
-                foreach (var pair in table)
-                {
-                    bito.Add(pair.Down);
-                    if (pair.Beaten) bito.Add(pair.Up);
-                }
+                if (defend) CheckHand(table, plHand2, false);
             }
-
-            if (playerFirst) { if (defend) CheckHand(table, plHand2, false); }
-            else             { if (defend) CheckHand(table, plHand1, false); }
+            else
+            {
+                if (defend) CheckHand(table, plHand1, false);
+            }
 
             AddCardsFromDeck(playerFirst);
             if (defend) playerFirst = !playerFirst;
@@ -278,13 +239,6 @@ internal class MTable
 
             if (result.HasValue)
             {
-                CurrentLog.Outcome = result.Value;
-                CurrentLog.Trump = trump;
-                CurrentLog.LoserCardCount = result.Value switch {
-                    EndGame.First  => player2.GetCount(),
-                    EndGame.Second => player1.GetCount(),
-                    _              => 0
-                };
                 return result.Value;
             }
         }
@@ -294,13 +248,25 @@ internal class MTable
     {
         if (first)
         {
-            while (player1.GetCount() < TotalCards && deck.Count > 0) { player1.AddToHand(deck[0]); plHand1.Add(deck[0]); deck.RemoveAt(0); }
-            while (player2.GetCount() < TotalCards && deck.Count > 0) { player2.AddToHand(deck[0]); plHand2.Add(deck[0]); deck.RemoveAt(0); }
+            while (player1.GetCount() < TotalCards && deck.Count > 0)
+            {
+                player1.AddToHand(deck[0]); plHand1.Add(deck[0]); deck.RemoveAt(0);
+            }
+            while (player2.GetCount() < TotalCards && deck.Count > 0)
+            {
+                player2.AddToHand(deck[0]); plHand2.Add(deck[0]); deck.RemoveAt(0);
+            }
         }
         else
         {
-            while (player2.GetCount() < TotalCards && deck.Count > 0) { player2.AddToHand(deck[0]); plHand2.Add(deck[0]); deck.RemoveAt(0); }
-            while (player1.GetCount() < TotalCards && deck.Count > 0) { player1.AddToHand(deck[0]); plHand1.Add(deck[0]); deck.RemoveAt(0); }
+            while (player2.GetCount() < TotalCards && deck.Count > 0)
+            {
+                player2.AddToHand(deck[0]); plHand2.Add(deck[0]); deck.RemoveAt(0);
+            }
+            while (player1.GetCount() < TotalCards && deck.Count > 0)
+            {
+                player1.AddToHand(deck[0]); plHand1.Add(deck[0]); deck.RemoveAt(0);
+            }
         }
     }
 
@@ -308,54 +274,68 @@ internal class MTable
     {
         if (down)
         {
-            foreach (var cp in table)
+            foreach (SCardPair cp in table)
             {
-                if (plHand.Contains(cp.Down)) plHand.Remove(cp.Down);
-                else throw new Exception("Игрок сыграл картой, которой нет в руке");
+                if (plHand.Contains(cp.Down))
+                    plHand.Remove(cp.Down);
+                else
+                    throw new Exception("Игрок сыграл картой, которой нет в руке");
             }
         }
         else
         {
-            foreach (var cp in table)
+            foreach (SCardPair cp in table)
             {
                 if (cp.Beaten)
                 {
-                    if (plHand.Contains(cp.Up)) plHand.Remove(cp.Up);
-                    else throw new Exception("Игрок отбился картой, которой нет в руке");
+                    if (plHand.Contains(cp.Up))
+                        plHand.Remove(cp.Up);
+                    else
+                        throw new Exception("Игрок отбился картой, которой нет в руке");
                 }
-                else throw new Exception("Не все карты покрыты");
+                else
+                    throw new Exception("Не все карты покрыты");
             }
         }
     }
 
     public static void ShowCard(SCard card)
     {
+        string msg = "";
         if ((int)card.Suit < 2) Console.ForegroundColor = ConsoleColor.Red;
-        string msg = card.Suit switch {
-            Suits.Hearts   => "ч",
-            Suits.Diamonds => "б",
-            Suits.Clubs    => "к",
-            Suits.Spades   => "п",
-            _              => "?"
-        };
-        msg += card.Rank switch {
-            6  => "6", 7  => "7", 8  => "8", 9  => "9", 10 => "0",
-            11 => "В", 12 => "Д", 13 => "К", 14 => "Т", _  => "?"
-        };
+        switch (card.Suit)
+        {
+            case Suits.Hearts:   msg = "ч"; break;
+            case Suits.Diamonds: msg = "б"; break;
+            case Suits.Clubs:    msg = "к"; break;
+            case Suits.Spades:   msg = "п"; break;
+        }
+        switch (card.Rank)
+        {
+            case 6:  msg += "6"; break;
+            case 7:  msg += "7"; break;
+            case 8:  msg += "8"; break;
+            case 9:  msg += "9"; break;
+            case 10: msg += "0"; break;
+            case 11: msg += "В"; break;
+            case 12: msg += "Д"; break;
+            case 13: msg += "К"; break;
+            case 14: msg += "Т"; break;
+        }
         Console.Write(msg);
         Console.ResetColor();
     }
 
     public static void ShowTable(List<SCardPair> table)
     {
-        foreach (var pair in table)
+        foreach (SCardPair pair in table)
         {
             if (pair.Beaten) ShowCard(pair.Up);
             else Console.Write("  ");
             Console.Write(Separator);
         }
         Console.WriteLine();
-        foreach (var pair in table)
+        foreach (SCardPair pair in table)
         {
             ShowCard(pair.Down);
             Console.Write(Separator);

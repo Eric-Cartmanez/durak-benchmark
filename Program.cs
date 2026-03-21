@@ -31,6 +31,29 @@ for (int i = 0; i < args.Length; i++)
 
 var players = DiscoverPlayers();
 
+if (printLogs)
+{
+    // Одна партия с полным выводом хода игры
+    var names = players.Keys.Order().ToList();
+    string name1 = playerArg ?? names[0];
+    string name2 = names.First(n => n != name1);
+
+    if (!players.ContainsKey(name1))
+    {
+        Console.WriteLine($"Неизвестный игрок: {name1}");
+        Console.WriteLine($"Доступные: {string.Join(", ", names)}");
+        return 1;
+    }
+
+    Console.WriteLine($"=== {name1} vs {name2} (1 партия с выводом) ===\n");
+    IPlayer p1 = players[name1]();
+    IPlayer p2 = players[name2]();
+    MTable.Initialize(p1, p2);
+    EndGame outcome = MTable.Play(true);
+    Console.WriteLine($"\nИтог: {outcome}");
+    return 0;
+}
+
 if (playerArg != null)
 {
     if (!players.ContainsKey(playerArg))
@@ -39,28 +62,27 @@ if (playerArg != null)
         Console.WriteLine($"Доступные: {string.Join(", ", players.Keys.Order())}");
         return 1;
     }
-    RunVsAll(playerArg, games, printLogs);
+    RunVsAll(playerArg, games);
 }
 else
 {
-    RunAllVsAll(games, printLogs);
+    RunAllVsAll(games);
 }
 
 return 0;
 
-void RunVsAll(string playerName, int games, bool printLogs)
+void RunVsAll(string playerName, int games)
 {
     Console.WriteLine($"=== {playerName} vs все ({games} партий каждый матч) ===\n");
     foreach (var (name, factory) in players.Where(p => p.Key != playerName))
     {
-        var result = Benchmark.Run(players[playerName], factory, games, collectLogs: printLogs);
+        BenchmarkResult result = Benchmark.Run(players[playerName], factory, games);
         result.Print();
-        if (printLogs && result.Logs.Count > 0) PrintGameLog(result.Logs[0]);
         Console.WriteLine();
     }
 }
 
-void RunAllVsAll(int games, bool printLogs)
+void RunAllVsAll(int games)
 {
     var names = players.Keys.Order().ToList();
     Console.WriteLine($"=== Все против всех ({games} партий каждый матч) ===\n");
@@ -68,30 +90,11 @@ void RunAllVsAll(int games, bool printLogs)
     {
         for (int j = i + 1; j < names.Count; j++)
         {
-            var result = Benchmark.Run(players[names[i]], players[names[j]], games, collectLogs: false);
+            BenchmarkResult result = Benchmark.Run(players[names[i]], players[names[j]], games);
             result.Print();
             Console.WriteLine();
         }
     }
-}
-
-static string CardStr(SCard c) => $"{c.Suit.ToString()[0]}{c.Rank}";
-
-static void PrintGameLog(GameLog log)
-{
-    Console.WriteLine("=== Лог партии ===");
-    Console.WriteLine($"Козырь: {CardStr(log.Trump)}  Итог: {log.Outcome}  Карт у проигравшего: {log.LoserCardCount}");
-    Console.WriteLine();
-    foreach (var a in log.Actions)
-    {
-        string actor  = a.Player1Acts ? "P1" : "P2";
-        string hand   = string.Join(" ", a.ActorHand.Select(CardStr));
-        string played = string.Join(" ", a.PlayedCards.Select(CardStr));
-        string table  = string.Join(" ", a.Table.Select(p =>
-            p.Beaten ? $"{CardStr(p.Down)}>{CardStr(p.Up)}" : CardStr(p.Down)));
-        Console.WriteLine($"{a.Type,-8} {actor}  рука=[{hand}]  стол=[{table}]  сыграл=[{played}]  бито:{a.SeenCards.Count}  колода:{a.DeckSize}  ok:{a.ActionResult}");
-    }
-    Console.WriteLine();
 }
 
 internal struct BenchmarkResult
@@ -102,7 +105,6 @@ internal struct BenchmarkResult
     public int Wins2;
     public int Draws;
     public double AvgLoserCards;
-    public List<GameLog> Logs;
 
     public void Print()
     {
@@ -117,12 +119,12 @@ internal struct BenchmarkResult
 
 internal static class Benchmark
 {
-    public static BenchmarkResult Run(Func<IPlayer> player1, Func<IPlayer> player2, int games, bool collectLogs = false)
+    public static BenchmarkResult Run(Func<IPlayer> player1, Func<IPlayer> player2, int games)
     {
-        var result = new BenchmarkResult { Logs = new List<GameLog>() };
+        BenchmarkResult result = new BenchmarkResult();
         int totalLoserCards = 0;
 
-        var originalOut = Console.Out;
+        TextWriter originalOut = Console.Out;
         Console.SetOut(TextWriter.Null);
 
         for (int i = 0; i < games; i++)
@@ -153,8 +155,6 @@ internal static class Benchmark
                     result.Draws++;
                     break;
             }
-
-            if (collectLogs) result.Logs.Add(MTable.CurrentLog);
         }
 
         Console.SetOut(originalOut);
